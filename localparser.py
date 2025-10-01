@@ -17,7 +17,7 @@ load_dotenv()
 
 # Cấu hình Kafka và Elasticsearch
 KAFKA_TOPIC = os.getenv("KAFKA_TOPIC", "raw-logs")
-KAFKA_BOOTSTRAP_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9202")
+KAFKA_BOOTSTRAP_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
 ELASTICSEARCH_HOSTS = os.getenv("ELASTICSEARCH_HOSTS", "http://10.81.89.131:9200")
 
 # Cấu hình cho Ollama (đọc từ file .env)

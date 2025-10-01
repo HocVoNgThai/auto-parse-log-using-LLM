@@ -7,7 +7,7 @@ import json
 # --- CẤU HÌNH ---
 KAFKA_BOOTSTRAP_SERVERS = 'localhost:9092'
 KAFKA_TOPIC = 'raw-logs'
-DELAY_SECONDS = 0.5  # Cứ 3 giây gửi một log mới
+DELAY_SECONDS = 3  # Cứ 3 giây gửi một log mới
 
 # --- DỮ LIỆU LOG MẪU ĐỂ GIẢ LẬP ---
 # Danh sách log đã được cập nhật với các mẫu bạn cung cấp
