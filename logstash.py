@@ -4,19 +4,14 @@ import os
 import re
 import time
 
-# --- PHẦN CẦN THAY ĐỔI ---
-# 1. Dán API Key của bạn vào đây
 GOOGLE_API_KEY = 'YOUR_GOOGLE_API_KEY'
-# -------------------------
 
-# Cấu hình API
 genai.configure(api_key=GOOGLE_API_KEY)
 model = genai.GenerativeModel('gemini-2.5-flash')
 
 def generate_logstash_config(log_sample, desired_output, input_config, output_config, log_schema, existing_code=None, error_message=None):
     """Gửi yêu cầu đến AI để tạo hoặc sửa code Logstash HOÀN CHỈNH."""
     
-    # *** BỘ QUY TẮC MỚI, ĐƠN GIẢN HÓA THEO YÊU CẦU ***
     prompt_rules = f"""
     Your primary task is to create a `filter` block that performs these actions IN ORDER:
     1. Use `if [message] =~ /^Receive Time,Serial Number/ {{ drop {{}} }}` to skip the header row.
@@ -49,7 +44,7 @@ def generate_logstash_config(log_sample, desired_output, input_config, output_co
         CRITICAL INSTRUCTION: You MUST provide the entire, complete, and runnable Logstash configuration code inside a single markdown block.
         """
 
-    print("--- 🤖 Đang gửi yêu cầu (với filter đơn giản hóa) đến AI... ---")
+    print("--- Đang gửi yêu cầu (với filter đơn giản hóa) đến AI... ---")
     try:
         response = model.generate_content(prompt)
         text_response = response.text
@@ -57,27 +52,26 @@ def generate_logstash_config(log_sample, desired_output, input_config, output_co
         
         if match:
             code = match.group(1).strip()
-            print("--- ✨ Trích xuất code thành công từ khối markdown. ---")
+            print("--- Trích xuất code thành công từ khối markdown. ---")
         else:
-            print("--- ⚠️ Không tìm thấy khối markdown, sử dụng toàn bộ phản hồi. ---")
+            print("--- Không tìm thấy khối markdown, sử dụng toàn bộ phản hồi. ---")
             code = text_response.strip()
 
         if code.startswith("logstash"):
-            print("--- 🧹 Phát hiện và loại bỏ chữ 'logstash' thừa ở đầu code. ---")
+            print("--- Phát hiện và loại bỏ chữ 'logstash' thừa ở đầu code. ---")
             code = re.sub(r'^\s*logstash\s*', '', code)
         return code
     except Exception as e:
         print(f"Lỗi khi gọi API của Google: {e}")
         return None
 
-# Các hàm còn lại không thay đổi
 def test_logstash_config(full_config_code, log_sample):
     test_config_code = re.sub(r'input\s*\{.*\}', 'input { stdin {} }', full_config_code, flags=re.DOTALL)
     test_config_code = re.sub(r'output\s*\{.*\}', 'output { stdout { codec => json_lines } }', test_config_code, flags=re.DOTALL)
     temp_filename = "/tmp/temp_test_logstash.conf"
     with open(temp_filename, "w", encoding='utf-8') as f: f.write(test_config_code)
     command = ["sudo", "-u", "logstash", "/usr/share/logstash/bin/logstash", "-f", temp_filename, "--path.settings", "/etc/logstash"]
-    print(f"--- ⚙️ Đang thực thi KIỂM THỬ với lệnh: {' '.join(command)} ---")
+    print(f"--- Đang thực thi KIỂM THỬ với lệnh: {' '.join(command)} ---")
     try:
         process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding='utf-8')
         stdout, stderr = process.communicate(input=log_sample)
@@ -91,7 +85,7 @@ def test_logstash_config(full_config_code, log_sample):
         return None, str(e), 1
 
 def deploy_config_and_restart_logstash(config_code, destination_path):
-    print(f"--- 🚀 Bắt đầu quá trình triển khai cấu hình mới ---")
+    print(f"--- Bắt đầu quá trình triển khai cấu hình mới ---")
     try:
         temp_filename = "/tmp/final_config.conf"
         with open(temp_filename, "w", encoding='utf-8') as f:
@@ -102,11 +96,11 @@ def deploy_config_and_restart_logstash(config_code, destination_path):
         
         print(f"Bước 2: Gán quyền sở hữu cho user 'logstash'...")
         subprocess.run(["sudo", "chown", "logstash:logstash", destination_path], check=True, capture_output=True)
-        print("--- ✅ Đã lưu và gán quyền thành công. ---")
+        print("--- Đã lưu và gán quyền thành công. ---")
 
         print("Bước 3: Khởi động lại service Logstash (systemctl restart)...")
         subprocess.run(["sudo", "systemctl", "restart", "logstash"], check=True, capture_output=True)
-        print("--- ✅ Lệnh khởi động lại đã được gửi. ---")
+        print("--- Lệnh khởi động lại đã được gửi. ---")
         
         print("Bước 4: Đợi 5 giây để service khởi động...")
         time.sleep(5)
@@ -115,17 +109,17 @@ def deploy_config_and_restart_logstash(config_code, destination_path):
         status_check = subprocess.run(["sudo", "systemctl", "is-active", "--quiet", "logstash"])
         
         if status_check.returncode == 0:
-            print("--- ✅✅✅ TUYỆT VỜI! Service Logstash đang 'active (running)' với cấu hình mới. ---")
+            print("--- Service Logstash đang 'active (running)' với cấu hình mới. ---")
             print("--- Bạn có thể xem log bằng lệnh: sudo journalctl -u logstash -f ---")
         else:
-            print("--- ❌❌❌ CẢNH BÁO: Logstash service đã KHÔNG thể khởi động thành công sau khi restart. ---")
+            print("--- CẢNH BÁO: Logstash service đã KHÔNG thể khởi động thành công sau khi restart. ---")
             print("--- Hãy kiểm tra log chi tiết bằng lệnh: sudo journalctl -u logstash ---")
         
         return True
 
     except subprocess.CalledProcessError as e:
         error_output = e.stderr.decode('utf-8') if e.stderr else str(e)
-        print(f"--- ❌ LỖI trong quá trình triển khai. ---")
+        print(f"--- LỖI trong quá trình triển khai. ---")
         print(f"Lệnh thất bại: {' '.join(e.cmd)}")
         print(f"Lỗi chi tiết: {error_output}")
         return False
@@ -139,13 +133,13 @@ def main():
     
     status_check = subprocess.run(["sudo", "systemctl", "is-active", "--quiet", "logstash"])
     if status_check.returncode == 0:
-        print("--- ⚠️ Service Logstash đang chạy. Sẽ tạm thời dừng service để bắt đầu quá trình tạo config mới. ---")
+        print("--- Service Logstash đang chạy. Sẽ tạm thời dừng service để bắt đầu quá trình tạo config mới. ---")
         try:
             subprocess.run(["sudo", "systemctl", "stop", "logstash"], check=True, capture_output=True)
-            print("--- ✅ Service Logstash đã được dừng tạm thời. ---")
+            print("--- Service Logstash đã được dừng tạm thời. ---")
         except subprocess.CalledProcessError as e:
             error_output = e.stderr.decode('utf-8') if e.stderr else str(e)
-            print(f"--- ❌ Không thể dừng service Logstash. Vui lòng kiểm tra quyền sudo. Lỗi: {error_output} ---")
+            print(f"--- Không thể dừng service Logstash. Vui lòng kiểm tra quyền sudo. Lỗi: {error_output} ---")
             return
     else:
         print("--- Service Logstash hiện không chạy. Bắt đầu quá trình... ---")
@@ -167,17 +161,17 @@ def main():
         current_code = generate_logstash_config(log_sample, desired_output, input_config, output_config, palo_alto_log_schema, current_code, error_message)
         
         if current_code:
-            print("\n--- 📄 Code do AI tạo ra trong lần lặp này: ---")
+            print("\n--- Code do AI tạo ra trong lần lặp này: ---")
             print(current_code)
             print("-------------------------------------------\n")
         else:
-            print("--- ❌ AI không trả về code. Dừng vòng lặp. ---")
+            print("--- AI không trả về code. Dừng vòng lặp. ---")
             break
         
         stdout, stderr, exit_code = test_logstash_config(current_code, log_sample)
         
         if exit_code != 0:
-            print(f"--- ❌ Logic filter thất bại (Exit Code: {exit_code}). Chuẩn bị gửi lại cho AI... ---")
+            print(f"--- Logic filter thất bại (Exit Code: {exit_code}). Chuẩn bị gửi lại cho AI... ---")
             if stderr:
                 error_lines = [line for line in stderr.splitlines() if "[INFO ]" not in line and "[WARN ]" not in line]
                 concise_error = "\n".join(error_lines[:5])
@@ -186,14 +180,14 @@ def main():
             else:
                 error_message = "Logstash exited with a non-zero status code but no stderr output."
         elif not stdout:
-            print("--- ⚠️ Logic filter không tạo ra output. Coi như lỗi. ---")
+            print("--- Logic filter không tạo ra output. Coi như lỗi. ---")
             error_message = "Logstash ran successfully but produced no output. The filter might have dropped the event."
         else:
-            print("\n--- ✅ THÀNH CÔNG! Logic filter đã chính xác. ---")
+            print("\n--- THÀNH CÔNG! Logic filter đã chính xác. ---")
             deploy_config_and_restart_logstash(current_code, final_config_path)
             return
             
-    print(f"\n--- ❌ Thất bại sau {max_retries} lần thử. Không thể tạo và triển khai cấu hình. ---")
+    print(f"\n--- Thất bại sau {max_retries} lần thử. Không thể tạo và triển khai cấu hình. ---")
 
 if __name__ == "__main__":
     if GOOGLE_API_KEY == 'YOUR_GOOGLE_API_KEY' or not GOOGLE_API_KEY:
