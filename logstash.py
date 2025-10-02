@@ -16,22 +16,20 @@ model = genai.GenerativeModel('gemini-2.5-flash')
 def generate_logstash_config(log_sample, desired_output, input_config, output_config, log_schema, existing_code=None, error_message=None):
     """Gửi yêu cầu đến AI để tạo hoặc sửa code Logstash HOÀN CHỈNH."""
     
-    # *** BỘ QUY TẮC MỚI, CHẶT CHẼ HƠN CHO AI ***
-    prompt_rules = """
+    # *** BỘ QUY TẮC MỚI, ĐƠN GIẢN HÓA THEO YÊU CẦU ***
+    prompt_rules = f"""
     Your primary task is to create a `filter` block that performs these actions IN ORDER:
-    1. Use `if [message] =~ /^Receive Time,Serial Number/ { drop {} }` to skip the header row.
+    1. Use `if [message] =~ /^Receive Time,Serial Number/ {{ drop {{}} }}` to skip the header row.
     2. Use the `csv` filter to parse the message directly into top-level fields. DO NOT use the `target` option. The column names are defined in the schema.
-    3. Use the `date` filter to parse the `Receive Time` field and overwrite the `@timestamp` field. The format is `YYYY/MM/dd HH:mm:ss`. The code is: `date { match => ["Receive Time", "YYYY/MM/dd HH:mm:ss"] target => "@timestamp" }`
-    4. Use a `mutate` filter to `rename` fields, `convert` data types, and `remove_field` to clean up the event.
-    5. CRITICAL: DO NOT remove the `@timestamp` field. It is essential.
+    3. Use a `mutate` filter to perform `rename` and `convert` operations to match the desired field names and types. You can also `remove_field` for fields that are obviously not needed.
+    4. CRITICAL: DO NOT remove or modify the default `@timestamp` field.
     """
 
     if error_message:
         prompt = f"""
         The following Logstash configuration failed. Please fix the logic inside the 'filter' block based on the error message, strictly following the rules below.
         
-        FILTER RULES:
-        {prompt_rules}
+        FILTER RULES:{prompt_rules}
         
         Palo Alto Traffic Log Schema (for context): {log_schema}
         Faulty Logstash Code: ```groovy\n{existing_code}\n```
@@ -42,31 +40,37 @@ def generate_logstash_config(log_sample, desired_output, input_config, output_co
         prompt = f"""
         Write a complete Logstash configuration.
         1. The 'input' block must be: {input_config}
-        2. The 'filter' block must strictly follow these rules:
-           {prompt_rules}
+        2. The 'filter' block must strictly follow these rules:{prompt_rules}
         3. The 'output' block must be: {output_config}
         
         Palo Alto Log Schema: --- {log_schema} ---
         Sample Raw Log: {log_sample}
         Desired JSON Output (for field names reference): {desired_output}
-        CRITICAL INSTRUCTION: You MUST provide the entire, complete, and runnable Logstash configuration code.
+        CRITICAL INSTRUCTION: You MUST provide the entire, complete, and runnable Logstash configuration code inside a single markdown block.
         """
 
-    print("--- 🤖 Đang gửi yêu cầu (với bộ quy tắc chặt chẽ) đến AI... ---")
+    print("--- 🤖 Đang gửi yêu cầu (với filter đơn giản hóa) đến AI... ---")
     try:
         response = model.generate_content(prompt)
-        code = response.text.strip().replace("```groovy", "").replace("```json", "").replace("```ruby", "").replace("```", "").strip()
+        text_response = response.text
+        match = re.search(r"```(?:groovy|json|logstash|ruby)?\s*(.*?)\s*```", text_response, re.DOTALL)
         
-        if code.startswith("logstash"):
-            print("--- 🧹 Phát hiện và loại bỏ chữ 'logstash' thừa ở đầu output của AI. ---")
-            code = re.sub(r'^\s*logstash\s*', '', code)
+        if match:
+            code = match.group(1).strip()
+            print("--- ✨ Trích xuất code thành công từ khối markdown. ---")
+        else:
+            print("--- ⚠️ Không tìm thấy khối markdown, sử dụng toàn bộ phản hồi. ---")
+            code = text_response.strip()
 
+        if code.startswith("logstash"):
+            print("--- 🧹 Phát hiện và loại bỏ chữ 'logstash' thừa ở đầu code. ---")
+            code = re.sub(r'^\s*logstash\s*', '', code)
         return code
     except Exception as e:
         print(f"Lỗi khi gọi API của Google: {e}")
         return None
 
-# Các hàm còn lại (test_logstash_config, deploy_config_and_restart_logstash, main) không thay đổi
+# Các hàm còn lại không thay đổi
 def test_logstash_config(full_config_code, log_sample):
     test_config_code = re.sub(r'input\s*\{.*\}', 'input { stdin {} }', full_config_code, flags=re.DOTALL)
     test_config_code = re.sub(r'output\s*\{.*\}', 'output { stdout { codec => json_lines } }', test_config_code, flags=re.DOTALL)
@@ -90,26 +94,35 @@ def deploy_config_and_restart_logstash(config_code, destination_path):
     print(f"--- 🚀 Bắt đầu quá trình triển khai cấu hình mới ---")
     try:
         temp_filename = "/tmp/final_config.conf"
-        with open(temp_filename, "w", encoding='utf-8') as f: f.write(config_code)
+        with open(temp_filename, "w", encoding='utf-8') as f:
+            f.write(config_code)
+        
         print(f"Bước 1: Di chuyển file cấu hình từ {temp_filename} đến '{destination_path}'...")
         subprocess.run(["sudo", "mv", temp_filename, destination_path], check=True, capture_output=True)
+        
         print(f"Bước 2: Gán quyền sở hữu cho user 'logstash'...")
         subprocess.run(["sudo", "chown", "logstash:logstash", destination_path], check=True, capture_output=True)
         print("--- ✅ Đã lưu và gán quyền thành công. ---")
+
         print("Bước 3: Khởi động lại service Logstash (systemctl restart)...")
         subprocess.run(["sudo", "systemctl", "restart", "logstash"], check=True, capture_output=True)
         print("--- ✅ Lệnh khởi động lại đã được gửi. ---")
+        
         print("Bước 4: Đợi 5 giây để service khởi động...")
         time.sleep(5)
         print("Kiểm tra trạng thái service Logstash...")
+        
         status_check = subprocess.run(["sudo", "systemctl", "is-active", "--quiet", "logstash"])
+        
         if status_check.returncode == 0:
             print("--- ✅✅✅ TUYỆT VỜI! Service Logstash đang 'active (running)' với cấu hình mới. ---")
             print("--- Bạn có thể xem log bằng lệnh: sudo journalctl -u logstash -f ---")
         else:
             print("--- ❌❌❌ CẢNH BÁO: Logstash service đã KHÔNG thể khởi động thành công sau khi restart. ---")
             print("--- Hãy kiểm tra log chi tiết bằng lệnh: sudo journalctl -u logstash ---")
+        
         return True
+
     except subprocess.CalledProcessError as e:
         error_output = e.stderr.decode('utf-8') if e.stderr else str(e)
         print(f"--- ❌ LỖI trong quá trình triển khai. ---")
@@ -120,9 +133,10 @@ def deploy_config_and_restart_logstash(config_code, destination_path):
         print(f"Đã xảy ra lỗi không xác định: {e}")
         return False
 
-
 def main():
+    """Hàm chính điều phối vòng lặp tự sửa lỗi."""
     print("--- Bắt đầu quy trình tự động tạo cấu hình Logstash ---")
+    
     status_check = subprocess.run(["sudo", "systemctl", "is-active", "--quiet", "logstash"])
     if status_check.returncode == 0:
         print("--- ⚠️ Service Logstash đang chạy. Sẽ tạm thời dừng service để bắt đầu quá trình tạo config mới. ---")
@@ -144,12 +158,14 @@ def main():
     output_config = f"""elasticsearch {{ hosts => {es_hosts} index => "{es_index}" }}"""
     log_sample = '2025/07/24 14:34:06,013201036611,TRAFFIC,end,2562,2025/07/24 14:34:06,14.225.209.154,210.211.104.250,14.225.209.154,210.211.104.250,VPN_GP_in_VietNam_NuocNgoai,,,incomplete,vsys1,EDGE,EDGE,ethernet1/2,ethernet1/2,Forward_SysLog_127.11,2260758,1,36523,80,36523,28869,0x400019,tcp,allow,152,78,74,2,2025/07/24 14:33:54,0,any,,7360121242230814409,0x8000000000000000,Viet Nam,Viet Nam,,1,1,aged-out,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,2025-07-24T14:34:07.730+07:00,,,unknown,unknown,unknown,1,,,incomplete,no,no,0,incomplete'
     desired_output = '{"Action_Flags": "0x8000000000000000", "Flags": "0x400019", "Dest_Zone": "EDGE", "Device_Name": "PAN-IDC-5220-01", "Action_Src": "from-policy", "Category": "any", "Src_Location": "Viet Nam", "Virtual_System": "vsys1", "Src_IP": "14.225.209.154", "Dest_Port": 80, "Session_End_Reason": "aged-out", "Log_Action": "Forward_SysLog_127.11", "Session_ID": "2260758", "Src_IP_Nat": "14.225.209.154", "Bytes_Received": 74, "Src_Zone": "EDGE", "Bytes_Sent": 78, "Rule_Name": "VPN_GP_in_VietNam_NuocNgoai", "Dest_Location": "Viet Nam", "Dest_IP_Nat": "210.211.104.250", "Action": "allow", "Dest_IP": "210.211.104.250", "Packets": 2, "Generated_Time": "2025/07/24 14:34:06", "Protocol": "tcp", "Bytes": 152, "Src_Port_Nat": 36523, "Application": "incomplete", "Src_Port": 36523}'
+    
     max_retries = 5
     current_code = None
     error_message = None
     for i in range(max_retries):
         print(f"\n--- VÒNG LẶP {i + 1}/{max_retries} ---")
         current_code = generate_logstash_config(log_sample, desired_output, input_config, output_config, palo_alto_log_schema, current_code, error_message)
+        
         if current_code:
             print("\n--- 📄 Code do AI tạo ra trong lần lặp này: ---")
             print(current_code)
@@ -157,7 +173,9 @@ def main():
         else:
             print("--- ❌ AI không trả về code. Dừng vòng lặp. ---")
             break
+        
         stdout, stderr, exit_code = test_logstash_config(current_code, log_sample)
+        
         if exit_code != 0:
             print(f"--- ❌ Logic filter thất bại (Exit Code: {exit_code}). Chuẩn bị gửi lại cho AI... ---")
             if stderr:
@@ -174,6 +192,7 @@ def main():
             print("\n--- ✅ THÀNH CÔNG! Logic filter đã chính xác. ---")
             deploy_config_and_restart_logstash(current_code, final_config_path)
             return
+            
     print(f"\n--- ❌ Thất bại sau {max_retries} lần thử. Không thể tạo và triển khai cấu hình. ---")
 
 if __name__ == "__main__":
