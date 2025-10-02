@@ -17,7 +17,8 @@ def generate_logstash_config(log_sample, desired_output, input_config, output_co
     1. Use `if [message] =~ /^Receive Time,Serial Number/ {{ drop {{}} }}` to skip the header row.
     2. Use the `csv` filter to parse the message directly into top-level fields. DO NOT use the `target` option. The column names are defined in the schema.
     3. Use a `mutate` filter to perform `rename` and `convert` operations to match the desired field names and types. You can also `remove_field` for fields that are obviously not needed.
-    4. CRITICAL: DO NOT remove or modify the default `@timestamp` field.
+    4. Use a `geoip` filter with source is `Dest_IP` and target is field `Dest_IP_GeoIP` and database is `/etc/logstash/GeoLite2-City.mmdb` to show the location of Destination IP
+    5. CRITICAL: DO NOT remove or modify the default `@timestamp` field.
     """
 
     if error_message:
