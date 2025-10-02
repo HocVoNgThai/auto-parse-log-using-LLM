@@ -15,14 +15,24 @@ model = genai.GenerativeModel('gemini-2.5-flash')
 
 def generate_logstash_config(log_sample, desired_output, input_config, output_config, log_schema, existing_code=None, error_message=None):
     """Gửi yêu cầu đến AI để tạo hoặc sửa code Logstash HOÀN CHỈNH."""
-    # *** CẬP NHẬT PROMPT ĐỂ SỬ DỤNG LOGIC IF/DROP ***
+    
+    # *** BỘ QUY TẮC MỚI, CHẶT CHẼ HƠN CHO AI ***
+    prompt_rules = """
+    Your primary task is to create a `filter` block that performs these actions IN ORDER:
+    1. Use `if [message] =~ /^Receive Time,Serial Number/ { drop {} }` to skip the header row.
+    2. Use the `csv` filter to parse the message directly into top-level fields. DO NOT use the `target` option. The column names are defined in the schema.
+    3. Use the `date` filter to parse the `Receive Time` field and overwrite the `@timestamp` field. The format is `YYYY/MM/dd HH:mm:ss`. The code is: `date { match => ["Receive Time", "YYYY/MM/dd HH:mm:ss"] target => "@timestamp" }`
+    4. Use a `mutate` filter to `rename` fields, `convert` data types, and `remove_field` to clean up the event.
+    5. CRITICAL: DO NOT remove the `@timestamp` field. It is essential.
+    """
+
     if error_message:
         prompt = f"""
-        The following complete Logstash configuration failed. This is a Logstash config file.
-        Please fix the logic inside the 'filter' block based on the concise error message below.
-        REMINDER: The first step in the filter must be `if [message] =~ /^Receive Time,Serial Number/ {{ drop {{}} }}` to skip the CSV header.
-        Do not change the overall structure, language, or the input/output blocks.
-
+        The following Logstash configuration failed. Please fix the logic inside the 'filter' block based on the error message, strictly following the rules below.
+        
+        FILTER RULES:
+        {prompt_rules}
+        
         Palo Alto Traffic Log Schema (for context): {log_schema}
         Faulty Logstash Code: ```groovy\n{existing_code}\n```
         Concise Error Message: {error_message}
@@ -30,21 +40,19 @@ def generate_logstash_config(log_sample, desired_output, input_config, output_co
         """
     else:
         prompt = f"""
-        Write a complete Logstash configuration with three sections: input, filter, and output.
-        1. The 'input' block must be exactly: {input_config}
-        2. The 'filter' block must perform two steps in order:
-           a. First, check if the raw message matches the CSV header and drop it. The exact code for this is: `if [message] =~ /^Receive Time,Serial Number/ {{ drop {{}} }}`
-           b. Second, use the `csv` filter to parse the remaining lines. The column names are defined in the schema below.
-           c. Finally, use a `mutate` filter to convert data types and remove unnecessary fields to match the 'Desired JSON Output'.
-        3. The 'output' block must be exactly: {output_config}
+        Write a complete Logstash configuration.
+        1. The 'input' block must be: {input_config}
+        2. The 'filter' block must strictly follow these rules:
+           {prompt_rules}
+        3. The 'output' block must be: {output_config}
         
         Palo Alto Log Schema: --- {log_schema} ---
         Sample Raw Log: {log_sample}
-        Desired JSON Output: {desired_output}
+        Desired JSON Output (for field names reference): {desired_output}
         CRITICAL INSTRUCTION: You MUST provide the entire, complete, and runnable Logstash configuration code.
         """
 
-    print("--- 🤖 Đang gửi yêu cầu (với logic if/drop) đến AI... ---")
+    print("--- 🤖 Đang gửi yêu cầu (với bộ quy tắc chặt chẽ) đến AI... ---")
     try:
         response = model.generate_content(prompt)
         code = response.text.strip().replace("```groovy", "").replace("```json", "").replace("```ruby", "").replace("```", "").strip()
@@ -112,6 +120,7 @@ def deploy_config_and_restart_logstash(config_code, destination_path):
         print(f"Đã xảy ra lỗi không xác định: {e}")
         return False
 
+
 def main():
     print("--- Bắt đầu quy trình tự động tạo cấu hình Logstash ---")
     status_check = subprocess.run(["sudo", "systemctl", "is-active", "--quiet", "logstash"])
@@ -126,9 +135,10 @@ def main():
             return
     else:
         print("--- Service Logstash hiện không chạy. Bắt đầu quá trình... ---")
+
     palo_alto_log_schema = "Receive Time,Serial Number,Type,Threat/Content Type,Future_Use,Generated Time,Source Address,Destination Address,NAT Source IP,NAT Destination IP,Rule Name,Source User,Destination User,Application,Virtual System,Source Zone,Destination Zone,Inbound Interface,Outbound Interface,Log Action,Future_Use,Session ID,Repeat Count,Source Port,Destination Port,NAT Source Port,NAT Destination Port,Flags,Protocol,Action,Bytes,Bytes Sent,Bytes Received,Packets,Start Time,Elapsed Time,Category,Future_Use,Sequence Number,Action Flags,Source Country,Destination Country,Future_Use,Packets Sent,Packets Received,Session End Reason,Device Group Hierarchy Level 1,Device Group Hierarchy Level 2,Device Group Hierarchy Level 3,Device Group Hierarchy Level 4,Virtual System Name,Device Name,Action Source,Source VM UUID,Destination VM UUID,Tunnel ID/IMSI,Monitor Tag/IMEI,Parent Session ID,Parent Start Time,Tunnel Type,SCTP Association ID,SCTP Chunks,SCTP Chunks Sent,SCTP Chunks Received,Rule UUID,HTTP/2 Connection,App Flap Count,Policy ID,Link Switches,SD-WAN Cluster,SD-WAN Device Type,SD-WAN Cluster Type,SD-WAN Site,Dynamic User Group Name,XFF Address,Source Device Category,Source Device Profile,Source Device Model,Source Device Vendor,Source Device OS Family,Source Device OS Version,Source Hostname,Source Mac Address,Destination Device Category,Destination Device Profile,Destination Device Model,Destination Device Vendor,Destination Device OS Family,Destination Device OS Version,Destination Hostname,Destination Mac Address,Container ID,POD Namespace,POD Name,Source External Dynamic List,Destination External Dynamic List,Host ID,Serial Number 2,Source Dynamic Address Group,Destination Dynamic Address Group,Session Owner,High Resolution Timestamp,A Slice Service Type,A Slice Differentiator,Application Subcategory,Application Category,Application Technology,Application Risk,Application Characteristic,Application Container,Tunled Application,Application SaaS,Application Sanctioned State,Offloaded"
     final_config_path = "/etc/logstash/conf.d/10-paloalto-autogen.conf"
-    input_config = f"""file {{ path => "/var/log/PAN_114.csv" start_position => "beginning" sincedb_path => "/dev/null" }}"""
+    input_config = f"""file {{ path => "/var/log/PAN_114.csv" start_position => "beginning" }}"""
     es_hosts = ["http://10.81.89.131:9200"]
     es_index = "paloalto-traffic-%{{+YYYY.MM.dd}}"
     output_config = f"""elasticsearch {{ hosts => {es_hosts} index => "{es_index}" }}"""
