@@ -1,0 +1,313 @@
+# --- API key --- 
+GOOGLE_API_KEY="AIzaSyAgqUBzJ7KwlOHCvE0DBZmypdma2vw1exI"
+
+# --- Prompt setting --- 
+LOG_SAMPLE='2025/07/24 14:34:06,013201036611,TRAFFIC,end,2562,2025/07/24 14:34:06,14.225.209.154,210.211.104.250,14.225.209.154,210.211.104.250,VPN_GP_in_VietNam_NuocNgoai,,,incomplete,vsys1,EDGE,EDGE,ethernet1/2,ethernet1/2,Forward_SysLog_127.11,2260758,1,36523,80,36523,28869,0x400019,tcp,allow,152,78,74,2,2025/07/24 14:33:54,0,any,,7360121242230814409,0x8000000000000000,Viet Nam,Viet Nam,,1,1,aged-out,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,2025-07-24T14:34:07.730+07:00,,,unknown,unknown,unknown,1,,,incomplete,no,no,0,incomplete'
+LOG_SCHEMA="Receive Time,Serial Number,Type,Threat/Content Type,Future_Use,Generated Time,Source Address,Destination Address,NAT Source IP,NAT Destination IP,Rule Name,Source User,Destination User,Application,Virtual System,Source Zone,Destination Zone,Inbound Interface,Outbound Interface,Log Action,Future_Use,Session ID,Repeat Count,Source Port,Destination Port,NAT Source Port,NAT Destination Port,Flags,Protocol,Action,Bytes,Bytes Sent,Bytes Received,Packets,Start Time,Elapsed Time,Category,Future_Use,Sequence Number,Action Flags,Source Country,Destination Country,Future_Use,Packets Sent,Packets Received,Session End Reason,Device Group Hierarchy Level 1,Device Group Hierarchy Level 2,Device Group Hierarchy Level 3,Device Group Hierarchy Level 4,Virtual System Name,Device Name,Action Source,Source VM UUID,Destination VM UUID,Tunnel ID/IMSI,Monitor Tag/IMEI,Parent Session ID,Parent Start Time,Tunnel Type,SCTP Association ID,SCTP Chunks,SCTP Chunks Sent,SCTP Chunks Received,Rule UUID,HTTP/2 Connection,App Flap Count,Policy ID,Link Switches,SD-WAN Cluster,SD-WAN Device Type,SD-WAN Cluster Type,SD-WAN Site,Dynamic User Group Name,XFF Address,Source Device Category,Source Device Profile,Source Device Model,Source Device Vendor,Source Device OS Family,Source Device OS Version,Source Hostname,Source Mac Address,Destination Device Category,Destination Device Profile,Destination Device Model,Destination Device Vendor,Destination Device OS Family,Destination Device OS Version,Destination Hostname,Destination Mac Address,Container ID,POD Namespace,POD Name,Source External Dynamic List,Destination External Dynamic List,Host ID,Serial Number 2,Source Dynamic Address Group,Destination Dynamic Address Group,Session Owner,High Resolution Timestamp,A Slice Service Type,A Slice Differentiator,Application Subcategory,Application Category,Application Technology,Application Risk,Application Characteristic,Application Container,Tunled Application,Application SaaS,Application Sanctioned State,Offloaded"
+LOG_DESIRED_JSON='{"Action_Flags": "0x8000000000000000", "Flags": "0x400019", "Dest_Zone": "EDGE", "Device_Name": "PAN-IDC-5220-01", "Action_Src": "from-policy", "Category": "any", "Src_Location": "Viet Nam", "Virtual_System": "vsys1", "Src_IP": "14.225.209.154", "Dest_Port": 80, "Session_End_Reason": "aged-out", "Log_Action": "Forward_SysLog_127.11", "Session_ID": "2260758", "Src_IP_Nat": "14.225.209.154", "Bytes_Received": 74, "Src_Zone": "EDGE", "Bytes_Sent": 78, "Rule_Name": "VPN_GP_in_VietNam_NuocNgoai", "Dest_Location": "Viet Nam", "Dest_IP_Nat": "210.211.104.250", "Action": "allow", "Dest_IP": "210.211.104.250", "Packets": 2, "Generated_Time": "2025/07/24 14:34:06", "Protocol": "tcp", "Bytes": 152, "Src_Port_Nat": 36523", "Application": "incomplete", "Src_Port": 36523}'
+
+# --- Elasticsearch setting ---
+LOG_TYPE_NAME="PaloAltoTraffic"
+LOG_INPUT_FILE_PATH="/var/log/PAN_114.csv"
+LOGSTASH_CONFIG_PATH="/etc/logstash/conf.d/10-paloalto-autogen.conf"
+ELASTICSEARCH_INDEX_PREFIX="paloalto-traffic"
+ELASTICSEARCH_HOSTS='["http://10.81.89.131:9200"]'
+
+# --- RULES FOR AI FILTER ---
+LOG_FILTER_RULES="""
+Your primary task is to create a `filter` block that performs these actions IN ORDER:
+1. Use `if [message] =~ /^Receive Time,Serial Number/ {{ drop {{}} }}` to skip the header row.
+2. Use the `csv` filter to parse the message directly into top-level fields. DO NOT use the `target` option. The column names are defined in the schema.
+3. Use a `mutate` filter to perform `rename` and `convert` operations to match the desired field names and types. You can also `remove_field` for fields that are obviously not needed.
+4. Use a `geoip` filter with source is `Dest_IP` and target is field `Dest_IP_GeoIP` and database is `/etc/logstash/GeoLite2-City.mmdb` to show the location of Destination IP.
+5. CRITICAL: DO NOT remove or modify the default `@timestamp` field.
+"""
+
+
+
+
+# File cấu hình cho log Palo Alto Traffic (sử dụng GROK chọn lọc)
+GOOGLE_API_KEY="AIzaSyAgqUBzJ7KwlOHCvE0DBZmypdma2vw1exI"
+
+LOG_TYPE_NAME="PaloAltoTraffic_SelectiveGrok"
+LOG_INPUT_FILE_PATH="/var/log/PAN_114.csv"
+LOGSTASH_CONFIG_PATH="/etc/logstash/conf.d/10-paloalto-traffic-autogen.conf"
+ELASTICSEARCH_INDEX_PREFIX="paloalto-traffic"
+ELASTICSEARCH_HOSTS='["http://10.81.89.131:9200"]'
+
+LOG_SAMPLE='2025/07/24 14:34:06,013201036611,TRAFFIC,end,2562,2025/07/24 14:34:06,14.225.209.154,210.211.104.250,14.225.209.154,210.211.104.250,VPN_GP_in_VietNam_NuocNgoai,,,incomplete,vsys1,EDGE,EDGE,ethernet1/2,ethernet1/2,Forward_SysLog_127.11,2260758,1,36523,80,36523,28869,0x400019,tcp,allow,152,78,74,2,2025/07/24 14:33:54,0,any,,7360121242230814409,0x8000000000000000,Viet Nam,Viet Nam,,1,1,aged-out,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,2025-07-24T14:34:07.730+07:00,,,unknown,unknown,unknown,1,,,incomplete,no,no,0,incomplete'
+LOG_SCHEMA="Receive Time,Serial Number,Type,Threat/Content Type,Future_Use,Generated Time,Source Address,Destination Address,NAT Source IP,NAT Destination IP,Rule Name,Source User,Destination User,Application,Virtual System,Source Zone,Destination Zone,Inbound Interface,Outbound Interface,Log Action,Future_Use,Session ID,Repeat Count,Source Port,Destination Port,NAT Source Port,NAT Destination Port,Flags,Protocol,Action,Bytes,Bytes Sent,Bytes Received,Packets,Start Time,Elapsed Time,Category,Future_Use,Sequence Number,Action Flags,Source Country,Destination Country,Future_Use,Packets Sent,Packets Received,Session End Reason,Device Group Hierarchy Level 1,Device Group Hierarchy Level 2,Device Group Hierarchy Level 3,Device Group Hierarchy Level 4,Virtual System Name,Device Name,Action Source,Source VM UUID,Destination VM UUID,Tunnel ID/IMSI,Monitor Tag/IMEI,Parent Session ID,Parent Start Time,Tunnel Type,SCTP Association ID,SCTP Chunks,SCTP Chunks Sent,SCTP Chunks Received,Rule UUID,HTTP/2 Connection,App Flap Count,Policy ID,Link Switches,SD-WAN Cluster,SD-WAN Device Type,SD-WAN Cluster Type,SD-WAN Site,Dynamic User Group Name,XFF Address,Source Device Category,Source Device Profile,Source Device Model,Source Device Vendor,Source Device OS Family,Source Device OS Version,Source Hostname,Source Mac Address,Destination Device Category,Destination Device Profile,Destination Device Model,Destination Device Vendor,Destination Device OS Family,Destination Device OS Version,Destination Hostname,Destination Mac Address,Container ID,POD Namespace,POD Name,Source External Dynamic List,Destination External Dynamic List,Host ID,Serial Number 2,Source Dynamic Address Group,Destination Dynamic Address Group,Session Owner,High Resolution Timestamp,A Slice Service Type,A Slice Differentiator,Application Subcategory,Application Category,Application Technology,Application Risk,Application Characteristic,Application Container,Tunled Application,Application SaaS,Application Sanctioned State,Offloaded"
+LOG_DESIRED_JSON='{"Action_Flags": "0x8000000000000000", "Flags": "0x400019", "Dest_Zone": "EDGE", "Device_Name": "PAN-IDC-5220-01", "Action_Src": "from-policy", "Category": "any", "Src_Location": "Viet Nam", "Virtual_System": "vsys1", "Src_IP": "14.225.209.154", "Dest_Port": 80, "Session_End_Reason": "aged-out", "Log_Action": "Forward_SysLog_127.11", "Session_ID": "2260758", "Src_IP_Nat": "14.225.209.154", "Bytes_Received": 74, "Src_Zone": "EDGE", "Bytes_Sent": 78, "Rule_Name": "VPN_GP_in_VietNam_NuocNgoai", "Dest_Location": "Viet Nam", "Dest_IP_Nat": "210.211.104.250", "Action": "allow", "Dest_IP": "210.211.104.250", "Packets": 2, "Generated_Time": "2025/07/24 14:34:06", "Protocol": "tcp", "Bytes": 152, "Src_Port_Nat": 36523", "Application": "incomplete", "Src_Port": 36523}'
+
+LOG_FILTER_RULES="
+Your primary task is to create a `filter` block that parses a Palo Alto TRAFFIC log using a **selective grok pattern**.
+
+The filter block must perform these actions IN ORDER:
+1.  **Skip Header:** Use `if [message] =~ /^Receive Time,Serial Number/ { drop {} }` to skip the header row.
+2.  **Selective Grok:** Use a single `grok` filter to parse the `message` and capture ONLY the fields needed for the 'Desired JSON Output'. Assign the final field names directly in the grok pattern (e.g., `%{IP:Src_IP}`). For all other fields from the schema that are NOT needed, you MUST use non-capturing patterns like `(?:[^,]*?)` or `(?:%{WORD})` to skip them efficiently.
+3.  **Mutate:** After grok, use a `mutate` filter for two specific tasks:
+    a. `convert`: Change the data type of all numeric fields captured by grok (like ports, bytes, packets) to `integer`. This is mandatory.
+    b. `update`: Set the event type using `update => {'type' => 'pa_traffic'}`.
+4.  **No Date Filter:** DO NOT use the `date` filter. The default `@timestamp` (ingestion time) is acceptable.
+5.  **No Prune Filter:** DO NOT use the `prune` filter. The selective grok pattern makes it unnecessary.
+6.  **GeoIP Filter:**  Use a `geoip` filter with source is `Dest_IP` and target is field `Dest_IP_GeoIP` and database is `/etc/logstash/GeoLite2-City.mmdb` to show the location of Destination IP.
+"
+
+
+
+# File cấu hình cho Palo Alto Syslog (Monolithic - Tập trung vào Traffic)
+GOOGLE_API_KEY="AIzaSyAgqUBzJ7KwlOHCvE0DBZmypdma2vw1exI"
+
+# --- Cấu hình chung ---
+LOG_TYPE_NAME="PaloAlto_Syslog_Monolithic"
+# Cấu hình input để nghe syslog trên port 514 và gán type
+LOG_INPUT_CONFIG="syslog { port => 514 type => 'paloalto' }"
+LOGSTASH_CONFIG_PATH="/etc/logstash/conf.d/20-paloalto-autogen.conf"
+ELASTICSEARCH_INDEX_PREFIX="paloalto"
+ELASTICSEARCH_HOSTS='["http://10.81.89.131:9200"]'
+
+# --- Dữ liệu mẫu (cung cấp nhiều loại để AI có ngữ cảnh) ---
+LOG_SAMPLE="""
+# Example for TRAFFIC log (to be fully parsed)
+<134>1 2025-10-02T10:30:00.123Z PA-VM 1,(2025/10/02 10:30:00),123456789,TRAFFIC,end,,2025/10/02 10:30:00,1.1.1.1,8.8.8.8,1.1.1.1,8.8.8.8,Allow-Web,,,dns,vsys1,trust,untrust,ethernet1/1,ethernet1/2,,12345,1,54321,80,54321,80,0x0,tcp,allow,300,150,150,2,2025/10/02 10:29:59,1,web-browsing,,98765,0x0,USA,USA,,1,1,aged-out,,,,,,,,,,,,,,,,
+
+# Example for THREAT log (for context only)
+<134>1 2025-10-02T10:31:00.456Z PA-VM 1,(2025/10/02 10:31:00),123456789,THREAT,url,,2025/10/02 10:31:00,1.1.1.1,9.9.9.9,1.1.1.1,9.9.9.9,Block-Malicious,,,web-browsing,vsys1,trust,untrust,ethernet1/1,ethernet1/2,,67890,1,12345,80,12345,80,0x0,tcp,alert,"",malicious-url,spyware,medium,client-to-server,98766,0x0,USA,USA,,C2,12345,abcdef12345,High,,,,,,,,,,,,,,,,,
+
+# Example for SYSTEM log (for context only)
+<134>1 2025-10-02T10:32:00.789Z PA-VM 1,(2025/10/02 10:32:00),123456789,SYSTEM,auth,,2025/10/02 10:32:00,vsys1,authentication-success,,,,,general,informational,"Authentication successful for user 'testuser'.",98767,0x0,,,,vsys1,PA-VM
+"""
+
+# Schema không dùng cho grok, để N/A
+LOG_SCHEMA="N/A for Grok parsing"
+
+# JSON mong muốn (chỉ cần cho TRAFFIC log vì ta đang tập trung vào nó)
+LOG_DESIRED_JSON='{"type":"pa_traffic", "Src_IP":"1.1.1.1", "Dest_IP":"8.8.8.8", "Dest_Port":80, "Action":"allow", "Bytes_Total":300, "Rule_Name":"Allow-Web"}'
+
+# --- BỘ QUY TẮC MỚI CHO AI (XÂY DỰNG KHUNG SƯỜN) ---
+LOG_FILTER_RULES="""
+Your primary task is to create a complex `filter` block that is wrapped inside `if "paloalto" in [type] { ... }`.
+
+The logic inside must be structured as follows:
+
+1.  **Primary Grok:** First, use a `grok` to parse the common header of the syslog message. The pattern is `%{TIMESTAMP_ISO8601:Event_Timestamp} %{NOTSPACE:LogSource} %{INT},(%{YEAR}/%{MONTHNUM}/%{MONTHDAY} %{TIME}),%{NUMBER:Serial},%{DATA:Type},%{DATA:Subtype},%{GREEDYDATA:MessLog}`. Tag failures with `_grokparsefailure`.
+
+2.  **Main Conditional Block:** If the primary grok is successful (`if "_grokparsefailure" not in [tags]`), create the following structure:
+    a. Use a `date` filter to set `@timestamp` from the `Event_Timestamp` field.
+    b. Start a series of `if / else if / else` blocks based on the value of the `[Type]` field.
+
+3.  **For `if [Type] == "TRAFFIC"`:**
+    * **THIS IS THE ONLY SECTION TO FULLY IMPLEMENT.**
+    * Use a nested `grok` filter to parse the `MessLog` field for all traffic log details (IPs, ports, bytes, packets, rule, zones, etc.).
+    * After parsing, use `mutate` to `convert` numeric fields (like ports and bytes) to integer.
+    * Use `mutate` to `update` the `type` field to `pa_traffic`.
+    * Remove temporary fields like `MessLog` and `message`.
+
+4.  **For `else if [Type] == "THREAT"`:**
+    * **CREATE A PLACEHOLDER ONLY.**
+    * Just add a `mutate` block that updates the type to `pa_threat`. Add a comment like `# TODO: Add detailed grok parsing for THREAT logs here.`
+
+5.  **For `else if [Type] == "SYSTEM"`:**
+    * **CREATE A PLACEHOLDER ONLY.**
+    * Just add a `mutate` block that updates the type to `pa_system`. Add a comment like `# TODO: Add detailed grok parsing for SYSTEM logs here.`
+
+6.  **Final `else` block:**
+    * For any other log type, just remove the `MessLog` field.
+"""
+
+
+
+
+
+(env) root@th-VMware-Virtual-Platform:/home/th/Documents# python3 parserlog.py paloalto_traffic
+--- Đang khởi tạo môi trường cho loại log: paloalto_traffic ---
+--- Đang chạy cho loại log: PaloAltoTraffic_SelectiveGrok ---
+--- ⚠️ Service Logstash đang chạy. Sẽ tạm thời dừng service để bắt đầu quá trình tạo config mới. ---
+--- ✅ Service Logstash đã được dừng tạm thời. ---
+
+--- VÒNG LẶP 1/5 ---
+--- 🤖 Đang gửi yêu cầu (cho PaloAltoTraffic_SelectiveGrok) đến AI... ---
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+E0000 00:00:1759891499.522235    3449 alts_credentials.cc:93] ALTS creds ignored. Not running on GCP and untrusted ALTS is not enabled.
+--- ✨ Trích xuất code thành công từ khối markdown. ---
+
+--- 📄 Code do AI tạo ra trong lần lặp này: ---
+input {
+  file {
+    path => "/var/log/PAN_114.csv"
+    start_position => "beginning"
+  }
+}
+
+filter {
+  # 1. Skip Header
+  if [message] =~ /^Receive Time,Serial Number/ {
+    drop {}
+  }
+
+  # 2. Selective Grok
+  grok {
+    match => {
+      "message" => "^(?:[^,]*?),?"                                                    # 0: Receive Time (skipped)
+                   "(?:[^,]*?),?"                                                    # 1: Serial Number (skipped)
+                   "(?:[^,]*?),?"                                                    # 2: Type (skipped)
+                   "(?:[^,]*?),?"                                                    # 3: Threat/Content Type (skipped)
+                   "(?:%{INT}),?"                                                    # 4: Future_Use (skipped, was 2562)
+                   "%{DATA:Generated_Time},?"                                        # 5: Generated Time
+                   "%{IP:Src_IP},?"                                                  # 6: Source Address
+                   "%{IP:Dest_IP},?"                                                 # 7: Destination Address
+                   "%{IP:Src_IP_Nat},?"                                              # 8: NAT Source IP
+                   "%{IP:Dest_IP_Nat},?"                                             # 9: NAT Destination IP
+                   "%{DATA:Rule_Name},?"                                             # 10: Rule Name
+                   "(?:[^,]*?),?"                                                    # 11: Source User (skipped, empty)
+                   "(?:[^,]*?),?"                                                    # 12: Destination User (skipped, empty)
+                   "%{NOTSPACE:Application},?"                                       # 13: Application
+                   "%{NOTSPACE:Virtual_System},?"                                    # 14: Virtual System
+                   "%{NOTSPACE:Src_Zone},?"                                          # 15: Source Zone
+                   "%{NOTSPACE:Dest_Zone},?"                                         # 16: Destination Zone
+                   "(?:[^,]*?),?"                                                    # 17: Inbound Interface (skipped)
+                   "(?:[^,]*?),?"                                                    # 18: Outbound Interface (skipped)
+                   "%{DATA:Log_Action},?"                                            # 19: Log Action
+                   "%{INT:Session_ID},?"                                             # 20: Session ID (aligned with sample log)
+                   "(?:%{INT}),?"                                                    # 21: Repeat Count (skipped)
+                   "%{INT:Src_Port},?"                                               # 22: Source Port
+                   "%{INT:Dest_Port},?"                                              # 23: Destination Port
+                   "%{INT:Src_Port_Nat},?"                                           # 24: NAT Source Port
+                   "(?:%{INT}),?"                                                    # 25: NAT Destination Port (skipped)
+                   "%{BASE16OR8NUM:Flags},?"                                         # 26: Flags
+                   "%{WORD:Protocol},?"                                              # 27: Protocol
+                   "%{WORD:Action},?"                                                # 28: Action
+                   "%{INT:Bytes},?"                                                  # 29: Bytes
+                   "%{INT:Bytes_Sent},?"                                             # 30: Bytes Sent
+                   "%{INT:Bytes_Received},?"                                         # 31: Bytes Received
+                   "%{INT:Packets},?"                                                # 32: Packets
+                   "(?:%{DATA}),?"                                                   # 33: Start Time (skipped, e.g., 2025/07/24 14:33:54)
+                   "(?:%{INT}),?"                                                    # 34: Elapsed Time (skipped)
+                   "%{NOTSPACE:Category},?"                                          # 35: Category
+                   "(?:[^,]*?),?"                                                    # 36: Future_Use (skipped, empty)
+                   "(?:%{NUMBER}),?"                                                 # 37: Sequence Number (skipped)
+                   "%{BASE16OR8NUM:Action_Flags},?"                                  # 38: Action Flags
+                   "%{DATA:Src_Location},?"                                          # 39: Source Country
+                   "%{DATA:Dest_Location},?"                                         # 40: Destination Country
+                   "(?:[^,]*?),?"                                                    # 41: Future_Use (skipped, empty)
+                   "(?:%{INT}),?"                                                    # 42: Packets Sent (skipped)
+                   "(?:%{INT}),?"                                                    # 43: Packets Received (skipped)
+                   "%{NOTSPACE:Session_End_Reason}"                                  # 44: Session End Reason
+                   "(?:,[^,]*?){44}$"                                                # Skip the remaining 44 fields (89 total schema fields - 45 parsed fields = 44 remaining)
+    }
+  }
+
+  # 3. Mutate
+  mutate {
+    convert => {
+      "Session_ID"    => "integer"
+      "Src_Port"      => "integer"
+      "Dest_Port"     => "integer"
+      "Src_Port_Nat"  => "integer"
+      "Bytes"         => "integer"
+      "Bytes_Sent"    => "integer"
+      "Bytes_Received" => "integer"
+      "Packets"       => "integer"
+    }
+    update => { "type" => "pa_traffic" }
+  }
+
+  # 6. GeoIP Filter
+  geoip {
+    source => "Dest_IP"
+    target => "Dest_IP_GeoIP"
+    database => "/etc/logstash/GeoLite2-City.mmdb"
+  }
+}
+
+output {
+  elasticsearch {
+    hosts => ["http://10.81.89.131:9200"]
+    index => "paloalto-traffic-%{+YYYY.MM.dd}"
+  }
+}
+-------------------------------------------
+
+--- ⚙️ Đang thực thi KIỂM THỬ với lệnh: sudo -u logstash /usr/share/logstash/bin/logstash -f /tmp/temp_test_logstash.conf --path.settings /etc/logstash ---
+
+--- ✅ THÀNH CÔNG! Logic filter đã chính xác. ---
+--- 🚀 Bắt đầu quá trình triển khai cấu hình mới ---
+Bước 1: Di chuyển file cấu hình từ /tmp/final_config.conf đến '/etc/logstash/conf.d/10-paloalto-traffic-autogen.conf'...
+Bước 2: Gán quyền sở hữu cho user 'logstash'...
+--- ✅ Đã lưu và gán quyền thành công. ---
+Bước 3: Khởi động lại service Logstash (systemctl restart)...
+--- ✅ Lệnh khởi động lại đã được gửi. ---
+Bước 4: Đợi 5 giây để service khởi động...
+Kiểm tra trạng thái service Logstash...
+--- ✅✅✅ TUYỆT VỜI! Service Logstash đang 'active (running)' với cấu hình mới. ---
+--- Bạn có thể xem log bằng lệnh: sudo journalctl -u logstash -f ---
+(env) root@th-VMware-Virtual-Platform:/home/th/Documents# sudo journalctl -u logstash -f
+Oct 08 09:47:33 th-VMware-Virtual-Platform logstash[4351]: org.jruby.exceptions.SystemExit: (SystemExit) exit
+Oct 08 09:47:33 th-VMware-Virtual-Platform logstash[4351]:         at org.jruby.RubyKernel.exit(org/jruby/RubyKernel.java:924) ~[jruby.jar:?]
+Oct 08 09:47:33 th-VMware-Virtual-Platform logstash[4351]:         at org.jruby.RubyKernel.exit(org/jruby/RubyKernel.java:883) ~[jruby.jar:?]
+Oct 08 09:47:33 th-VMware-Virtual-Platform logstash[4351]:         at usr.share.logstash.lib.bootstrap.environment.<main>(/usr/share/logstash/lib/bootstrap/environment.rb:90) ~[?:?]
+Oct 08 09:47:33 th-VMware-Virtual-Platform systemd[1]: logstash.service: Main process exited, code=exited, status=1/FAILURE
+Oct 08 09:47:33 th-VMware-Virtual-Platform systemd[1]: logstash.service: Failed with result 'exit-code'.
+Oct 08 09:47:33 th-VMware-Virtual-Platform systemd[1]: logstash.service: Consumed 19.526s CPU time.
+Oct 08 09:47:33 th-VMware-Virtual-Platform systemd[1]: logstash.service: Scheduled restart job, restart counter is at 13.
+Oct 08 09:47:33 th-VMware-Virtual-Platform systemd[1]: Started logstash.service - logstash.
+Oct 08 09:47:33 th-VMware-Virtual-Platform logstash[4415]: Using bundled JDK: /usr/share/logstash/jdk
+Oct 08 09:47:39 th-VMware-Virtual-Platform logstash[4415]: Sending Logstash logs to /var/log/logstash which is now configured via log4j2.properties
+Oct 08 09:47:39 th-VMware-Virtual-Platform logstash[4415]: [2025-10-08T09:47:39,440][INFO ][logstash.runner          ] Log4j configuration path used is: /etc/logstash/log4j2.properties
+Oct 08 09:47:39 th-VMware-Virtual-Platform logstash[4415]: [2025-10-08T09:47:39,443][INFO ][logstash.runner          ] Starting Logstash {"logstash.version"=>"9.0.4", "jruby.version"=>"jruby 9.4.9.0 (3.1.4) 2024-11-04 547c6b150e OpenJDK 64-Bit Server VM 21.0.7+6-LTS on 21.0.7+6-LTS +indy +jit [x86_64-linux]"}
+Oct 08 09:47:39 th-VMware-Virtual-Platform logstash[4415]: [2025-10-08T09:47:39,445][INFO ][logstash.runner          ] JVM bootstrap flags: [-Xms1g, -Xmx1g, -Djava.awt.headless=true, -Dfile.encoding=UTF-8, -Djruby.compile.invokedynamic=true, -XX:+HeapDumpOnOutOfMemoryError, -Djava.security.egd=file:/dev/urandom, -Dlog4j2.isThreadContextMapInheritable=true, -Djruby.regexp.interruptible=true, -Djdk.io.File.enableADS=true, --add-exports=jdk.compiler/com.sun.tools.javac.api=ALL-UNNAMED, --add-exports=jdk.compiler/com.sun.tools.javac.file=ALL-UNNAMED, --add-exports=jdk.compiler/com.sun.tools.javac.parser=ALL-UNNAMED, --add-exports=jdk.compiler/com.sun.tools.javac.tree=ALL-UNNAMED, --add-exports=jdk.compiler/com.sun.tools.javac.util=ALL-UNNAMED, --add-opens=java.base/java.security=ALL-UNNAMED, --add-opens=java.base/java.io=ALL-UNNAMED, --add-opens=java.base/java.nio.channels=ALL-UNNAMED, --add-opens=java.base/sun.nio.ch=ALL-UNNAMED, --add-opens=java.management/sun.management=ALL-UNNAMED, -Dio.netty.allocator.maxOrder=11]
+Oct 08 09:47:39 th-VMware-Virtual-Platform logstash[4415]: [2025-10-08T09:47:39,463][INFO ][org.logstash.jackson.StreamReadConstraintsUtil] Jackson default value override `logstash.jackson.stream-read-constraints.max-string-length` configured to `200000000` (logstash default)
+Oct 08 09:47:39 th-VMware-Virtual-Platform logstash[4415]: [2025-10-08T09:47:39,464][INFO ][org.logstash.jackson.StreamReadConstraintsUtil] Jackson default value override `logstash.jackson.stream-read-constraints.max-number-length` configured to `10000` (logstash default)
+Oct 08 09:47:39 th-VMware-Virtual-Platform logstash[4415]: [2025-10-08T09:47:39,464][INFO ][org.logstash.jackson.StreamReadConstraintsUtil] Jackson default value override `logstash.jackson.stream-read-constraints.max-nesting-depth` configured to `1000` (logstash default)
+Oct 08 09:47:39 th-VMware-Virtual-Platform logstash[4415]: [2025-10-08T09:47:39,862][INFO ][logstash.agent           ] Successfully started Logstash API endpoint {:port=>9600, :ssl_enabled=>false}
+Oct 08 09:47:39 th-VMware-Virtual-Platform logstash[4415]: [2025-10-08T09:47:39,940][ERROR][logstash.agent           ] Failed to execute action {:action=>LogStash::PipelineAction::Create/pipeline_id:main, :exception=>"LogStash::ConfigurationError", :message=>"Expected one of [ \\t\\r\\n], \"#\", \"=>\" at line 19, column 20 (byte 482) after filter {\n  # 1. Skip Header\n  if [message] =~ /^Receive Time,Serial Number/ {\n    drop {}\n  }\n\n  # 2. Selective Grok\n  grok {\n    match => {\n      \"message\" => \"^(?:[^,]*?),?\"                                                    # 0: Receive Time (skipped)\n                   \"(?:[^,]*?),?\"                                                    # 1: Serial Number (skipped)\n                   ", :backtrace=>["/usr/share/logstash/logstash-core/lib/logstash/compiler.rb:32:in `compile_imperative'", "org/logstash/execution/AbstractPipelineExt.java:285:in `initialize'", "org/logstash/execution/AbstractPipelineExt.java:223:in `initialize'", "/usr/share/logstash/logstash-core/lib/logstash/java_pipeline.rb:47:in `initialize'", "org/jruby/RubyClass.java:949:in `new'", "/usr/share/logstash/logstash-core/lib/logstash/pipeline_action/create.rb:50:in `execute'", "/usr/share/logstash/logstash-core/lib/logstash/agent.rb:431:in `block in converge_state'"]}
+Oct 08 09:47:39 th-VMware-Virtual-Platform logstash[4415]: [2025-10-08T09:47:39,948][INFO ][logstash.runner          ] Logstash shut down.
+Oct 08 09:47:39 th-VMware-Virtual-Platform logstash[4415]: [2025-10-08T09:47:39,951][FATAL][org.logstash.Logstash    ] Logstash stopped processing because of an error: (SystemExit) exit
+Oct 08 09:47:39 th-VMware-Virtual-Platform logstash[4415]: org.jruby.exceptions.SystemExit: (SystemExit) exit
+Oct 08 09:47:39 th-VMware-Virtual-Platform logstash[4415]:         at org.jruby.RubyKernel.exit(org/jruby/RubyKernel.java:924) ~[jruby.jar:?]
+Oct 08 09:47:39 th-VMware-Virtual-Platform logstash[4415]:         at org.jruby.RubyKernel.exit(org/jruby/RubyKernel.java:883) ~[jruby.jar:?]
+Oct 08 09:47:39 th-VMware-Virtual-Platform logstash[4415]:         at usr.share.logstash.lib.bootstrap.environment.<main>(/usr/share/logstash/lib/bootstrap/environment.rb:90) ~[?:?]
+Oct 08 09:47:39 th-VMware-Virtual-Platform systemd[1]: logstash.service: Main process exited, code=exited, status=1/FAILURE
+Oct 08 09:47:39 th-VMware-Virtual-Platform systemd[1]: logstash.service: Failed with result 'exit-code'.
+Oct 08 09:47:39 th-VMware-Virtual-Platform systemd[1]: logstash.service: Consumed 19.853s CPU time.
+Oct 08 09:47:40 th-VMware-Virtual-Platform systemd[1]: logstash.service: Scheduled restart job, restart counter is at 14.
+Oct 08 09:47:40 th-VMware-Virtual-Platform systemd[1]: Started logstash.service - logstash.
+Oct 08 09:47:40 th-VMware-Virtual-Platform logstash[4481]: Using bundled JDK: /usr/share/logstash/jdk
+Oct 08 09:47:45 th-VMware-Virtual-Platform logstash[4481]: Sending Logstash logs to /var/log/logstash which is now configured via log4j2.properties
+Oct 08 09:47:45 th-VMware-Virtual-Platform logstash[4481]: [2025-10-08T09:47:45,868][INFO ][logstash.runner          ] Log4j configuration path used is: /etc/logstash/log4j2.properties
+Oct 08 09:47:45 th-VMware-Virtual-Platform logstash[4481]: [2025-10-08T09:47:45,871][INFO ][logstash.runner          ] Starting Logstash {"logstash.version"=>"9.0.4", "jruby.version"=>"jruby 9.4.9.0 (3.1.4) 2024-11-04 547c6b150e OpenJDK 64-Bit Server VM 21.0.7+6-LTS on 21.0.7+6-LTS +indy +jit [x86_64-linux]"}
+Oct 08 09:47:45 th-VMware-Virtual-Platform logstash[4481]: [2025-10-08T09:47:45,873][INFO ][logstash.runner          ] JVM bootstrap flags: [-Xms1g, -Xmx1g, -Djava.awt.headless=true, -Dfile.encoding=UTF-8, -Djruby.compile.invokedynamic=true, -XX:+HeapDumpOnOutOfMemoryError, -Djava.security.egd=file:/dev/urandom, -Dlog4j2.isThreadContextMapInheritable=true, -Djruby.regexp.interruptible=true, -Djdk.io.File.enableADS=true, --add-exports=jdk.compiler/com.sun.tools.javac.api=ALL-UNNAMED, --add-exports=jdk.compiler/com.sun.tools.javac.file=ALL-UNNAMED, --add-exports=jdk.compiler/com.sun.tools.javac.parser=ALL-UNNAMED, --add-exports=jdk.compiler/com.sun.tools.javac.tree=ALL-UNNAMED, --add-exports=jdk.compiler/com.sun.tools.javac.util=ALL-UNNAMED, --add-opens=java.base/java.security=ALL-UNNAMED, --add-opens=java.base/java.io=ALL-UNNAMED, --add-opens=java.base/java.nio.channels=ALL-UNNAMED, --add-opens=java.base/sun.nio.ch=ALL-UNNAMED, --add-opens=java.management/sun.management=ALL-UNNAMED, -Dio.netty.allocator.maxOrder=11]
+Oct 08 09:47:45 th-VMware-Virtual-Platform logstash[4481]: [2025-10-08T09:47:45,892][INFO ][org.logstash.jackson.StreamReadConstraintsUtil] Jackson default value override `logstash.jackson.stream-read-constraints.max-string-length` configured to `200000000` (logstash default)
+Oct 08 09:47:45 th-VMware-Virtual-Platform logstash[4481]: [2025-10-08T09:47:45,893][INFO ][org.logstash.jackson.StreamReadConstraintsUtil] Jackson default value override `logstash.jackson.stream-read-constraints.max-number-length` configured to `10000` (logstash default)
+Oct 08 09:47:45 th-VMware-Virtual-Platform logstash[4481]: [2025-10-08T09:47:45,893][INFO ][org.logstash.jackson.StreamReadConstraintsUtil] Jackson default value override `logstash.jackson.stream-read-constraints.max-nesting-depth` configured to `1000` (logstash default)
+Oct 08 09:47:46 th-VMware-Virtual-Platform logstash[4481]: [2025-10-08T09:47:46,265][INFO ][logstash.agent           ] Successfully started Logstash API endpoint {:port=>9600, :ssl_enabled=>false}
+Oct 08 09:47:46 th-VMware-Virtual-Platform logstash[4481]: [2025-10-08T09:47:46,333][ERROR][logstash.agent           ] Failed to execute action {:action=>LogStash::PipelineAction::Create/pipeline_id:main, :exception=>"LogStash::ConfigurationError", :message=>"Expected one of [ \\t\\r\\n], \"#\", \"=>\" at line 19, column 20 (byte 482) after filter {\n  # 1. Skip Header\n  if [message] =~ /^Receive Time,Serial Number/ {\n    drop {}\n  }\n\n  # 2. Selective Grok\n  grok {\n    match => {\n      \"message\" => \"^(?:[^,]*?),?\"                                                    # 0: Receive Time (skipped)\n                   \"(?:[^,]*?),?\"                                                    # 1: Serial Number (skipped)\n                   ", :backtrace=>["/usr/share/logstash/logstash-core/lib/logstash/compiler.rb:32:in `compile_imperative'", "org/logstash/execution/AbstractPipelineExt.java:285:in `initialize'", "org/logstash/execution/AbstractPipelineExt.java:223:in `initialize'", "/usr/share/logstash/logstash-core/lib/logstash/java_pipeline.rb:47:in `initialize'", "org/jruby/RubyClass.java:949:in `new'", "/usr/share/logstash/logstash-core/lib/logstash/pipeline_action/create.rb:50:in `execute'", "/usr/share/logstash/logstash-core/lib/logstash/agent.rb:431:in `block in converge_state'"]}
+Oct 08 09:47:46 th-VMware-Virtual-Platform logstash[4481]: [2025-10-08T09:47:46,343][INFO ][logstash.runner          ] Logstash shut down.
+Oct 08 09:47:46 th-VMware-Virtual-Platform logstash[4481]: [2025-10-08T09:47:46,346][FATAL][org.logstash.Logstash    ] Logstash stopped processing because of an error: (SystemExit) exit
+Oct 08 09:47:46 th-VMware-Virtual-Platform logstash[4481]: org.jruby.exceptions.SystemExit: (SystemExit) exit
+Oct 08 09:47:46 th-VMware-Virtual-Platform logstash[4481]:         at org.jruby.RubyKernel.exit(org/jruby/RubyKernel.java:924) ~[jruby.jar:?]
+Oct 08 09:47:46 th-VMware-Virtual-Platform logstash[4481]:         at org.jruby.RubyKernel.exit(org/jruby/RubyKernel.java:883) ~[jruby.jar:?]
+Oct 08 09:47:46 th-VMware-Virtual-Platform logstash[4481]:         at usr.share.logstash.lib.bootstrap.environment.<main>(/usr/share/logstash/lib/bootstrap/environment.rb:90) ~[?:?]
+Oct 08 09:47:46 th-VMware-Virtual-Platform systemd[1]: logstash.service: Main process exited, code=exited, status=1/FAILURE
+Oct 08 09:47:46 th-VMware-Virtual-Platform systemd[1]: logstash.service: Failed with result 'exit-code'.
+Oct 08 09:47:46 th-VMware-Virtual-Platform systemd[1]: logstash.service: Consumed 19.404s CPU time.
+Oct 08 09:47:46 th-VMware-Virtual-Platform systemd[1]: logstash.service: Scheduled restart job, restart counter is at 15.
+Oct 08 09:47:46 th-VMware-Virtual-Platform systemd[1]: Started logstash.service - logstash.
+Oct 08 09:47:46 th-VMware-Virtual-Platform logstash[4546]: Using bundled JDK: /usr/share/logstash/jdk
+Oct 08 09:47:52 th-VMware-Virtual-Platform logstash[4546]: Sending Logstash logs to /var/log/logstash which is now configured via log4j2.properties
+Oct 08 09:47:52 th-VMware-Virtual-Platform logstash[4546]: [2025-10-08T09:47:52,205][INFO ][logstash.runner          ] Log4j configuration path used is: /etc/logstash/log4j2.properties
+Oct 08 09:47:52 th-VMware-Virtual-Platform logstash[4546]: [2025-10-08T09:47:52,208][INFO ][logstash.runner          ] Starting Logstash {"logstash.version"=>"9.0.4", "jruby.version"=>"jruby 9.4.9.0 (3.1.4) 2024-11-04 547c6b150e OpenJDK 64-Bit Server VM 21.0.7+6-LTS on 21.0.7+6-LTS +indy +jit [x86_64-linux]"}
+Oct 08 09:47:52 th-VMware-Virtual-Platform logstash[4546]: [2025-10-08T09:47:52,209][INFO ][logstash.runner          ] JVM bootstrap flags: [-Xms1g, -Xmx1g, -Djava.awt.headless=true, -Dfile.encoding=UTF-8, -Djruby.compile.invokedynamic=true, -XX:+HeapDumpOnOutOfMemoryError, -Djava.security.egd=file:/dev/urandom, -Dlog4j2.isThreadContextMapInheritable=true, -Djruby.regexp.interruptible=true, -Djdk.io.File.enableADS=true, --add-exports=jdk.compiler/com.sun.tools.javac.api=ALL-UNNAMED, --add-exports=jdk.compiler/com.sun.tools.javac.file=ALL-UNNAMED, --add-exports=jdk.compiler/com.sun.tools.javac.parser=ALL-UNNAMED, --add-exports=jdk.compiler/com.sun.tools.javac.tree=ALL-UNNAMED, --add-exports=jdk.compiler/com.sun.tools.javac.util=ALL-UNNAMED, --add-opens=java.base/java.security=ALL-UNNAMED, --add-opens=java.base/java.io=ALL-UNNAMED, --add-opens=java.base/java.nio.channels=ALL-UNNAMED, --add-opens=java.base/sun.nio.ch=ALL-UNNAMED, --add-opens=java.management/sun.management=ALL-UNNAMED, -Dio.netty.allocator.maxOrder=11]
+Oct 08 09:47:52 th-VMware-Virtual-Platform logstash[4546]: [2025-10-08T09:47:52,232][INFO ][org.logstash.jackson.StreamReadConstraintsUtil] Jackson default value override `logstash.jackson.stream-read-constraints.max-string-length` configured to `200000000` (logstash default)
+Oct 08 09:47:52 th-VMware-Virtual-Platform logstash[4546]: [2025-10-08T09:47:52,232][INFO ][org.logstash.jackson.StreamReadConstraintsUtil] Jackson default value override `logstash.jackson.stream-read-constraints.max-number-length` configured to `10000` (logstash default)
+Oct 08 09:47:52 th-VMware-Virtual-Platform logstash[4546]: [2025-10-08T09:47:52,232][INFO ][org.logstash.jackson.StreamReadConstraintsUtil] Jackson default value override `logstash.jackson.stream-read-constraints.max-nesting-depth` configured to `1000` (logstash default)
+Oct 08 09:47:52 th-VMware-Virtual-Platform logstash[4546]: [2025-10-08T09:47:52,662][INFO ][logstash.agent           ] Successfully started Logstash API endpoint {:port=>9600, :ssl_enabled=>false}
+Oct 08 09:47:52 th-VMware-Virtual-Platform logstash[4546]: [2025-10-08T09:47:52,725][ERROR][logstash.agent           ] Failed to execute action {:action=>LogStash::PipelineAction::Create/pipeline_id:main, :exception=>"LogStash::ConfigurationError", :message=>"Expected one of [ \\t\\r\\n], \"#\", \"=>\" at line 19, column 20 (byte 482) after filter {\n  # 1. Skip Header\n  if [message] =~ /^Receive Time,Serial Number/ {\n    drop {}\n  }\n\n  # 2. Selective Grok\n  grok {\n    match => {\n      \"message\" => \"^(?:[^,]*?),?\"                                                    # 0: Receive Time (skipped)\n                   \"(?:[^,]*?),?\"                                                    # 1: Serial Number (skipped)\n                   ", :backtrace=>["/usr/share/logstash/logstash-core/lib/logstash/compiler.rb:32:in `compile_imperative'", "org/logstash/execution/AbstractPipelineExt.java:285:in `initialize'", "org/logstash/execution/AbstractPipelineExt.java:223:in `initialize'", "/usr/share/logstash/logstash-core/lib/logstash/java_pipeline.rb:47:in `initialize'", "org/jruby/RubyClass.java:949:in `new'", "/usr/share/logstash/logstash-core/lib/logstash/pipeline_action/create.rb:50:in `execute'", "/usr/share/logstash/logstash-core/lib/logstash/agent.rb:431:in `block in converge_state'"]}
+Oct 08 09:47:52 th-VMware-Virtual-Platform logstash[4546]: [2025-10-08T09:47:52,734][INFO ][logstash.runner          ] Logstash shut down.
+Oct 08 09:47:52 th-VMware-Virtual-Platform logstash[4546]: [2025-10-08T09:47:52,737][FATAL][org.logstash.Logstash    ] Logstash stopped processing because of an error: (SystemExit) exit
+Oct 08 09:47:52 th-VMware-Virtual-Platform logstash[4546]: org.jruby.exceptions.SystemExit: (SystemExit) exit
+Oct 08 09:47:52 th-VMware-Virtual-Platform logstash[4546]:         at org.jruby.RubyKernel.exit(org/jruby/RubyKernel.java:924) ~[jruby.jar:?]
+Oct 08 09:47:52 th-VMware-Virtual-Platform logstash[4546]:         at org.jruby.RubyKernel.exit(org/jruby/RubyKernel.java:883) ~[jruby.jar:?]
+Oct 08 09:47:52 th-VMware-Virtual-Platform logstash[4546]:         at usr.share.logstash.lib.bootstrap.environment.<main>(/usr/share/logstash/lib/bootstrap/environment.rb:90) ~[?:?]
+Oct 08 09:47:52 th-VMware-Virtual-Platform systemd[1]: logstash.service: Main process exited, code=exited, status=1/FAILURE
+Oct 08 09:47:52 th-VMware-Virtual-Platform systemd[1]: logstash.service: Failed with result 'exit-code'.
