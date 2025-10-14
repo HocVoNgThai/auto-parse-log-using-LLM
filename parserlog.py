@@ -17,16 +17,13 @@ def initialize_env(log_type):
     
     if not os.path.exists(env_path):
         print(f"LỖI: Không tìm thấy file định nghĩa '{env_path}'.")
-        print(f"Hãy chắc chắn thư mục '{config_dir}' và file .env bên trong nó tồn tại.")
         return False
     
-    # Tải các biến môi trường từ file .env được chỉ định
     load_dotenv(dotenv_path=env_path)
     return True
 
 def generate_logstash_config(log_sample, desired_output, input_config, output_config, log_schema, filter_rules, log_type_name, existing_code=None, error_message=None):
     """Gửi yêu cầu đến AI để tạo hoặc sửa code Logstash HOÀN CHỈNH."""
-    
     if error_message:
         prompt = f"""The following Logstash configuration for {log_type_name} failed. Please fix the logic inside the 'filter' block based on the error message, strictly following the rules below.
         FILTER RULES:{filter_rules}
@@ -46,11 +43,8 @@ def generate_logstash_config(log_sample, desired_output, input_config, output_co
 
     print(f"--- 🤖 Đang gửi yêu cầu (cho {log_type_name}) đến AI... ---")
     try:
-        # Lấy API key từ biến môi trường đã được tải
         api_key = os.getenv('GOOGLE_API_KEY')
-        if not api_key:
-            print("LỖI: GOOGLE_API_KEY không được thiết lập.")
-            return None
+        if not api_key: raise ValueError("GOOGLE_API_KEY không được thiết lập.")
         genai.configure(api_key=api_key)
         model = genai.GenerativeModel('gemini-2.5-flash')
         
@@ -65,7 +59,6 @@ def generate_logstash_config(log_sample, desired_output, input_config, output_co
             code = text_response.strip()
 
         if code.startswith("logstash"):
-            print("--- 🧹 Phát hiện và loại bỏ chữ 'logstash' thừa ở đầu code. ---")
             code = re.sub(r'^\s*logstash\s*', '', code)
         return code
     except Exception as e:
@@ -109,58 +102,40 @@ def deploy_config_and_restart_logstash(config_code, destination_path):
         status_check = subprocess.run(["sudo", "systemctl", "is-active", "--quiet", "logstash"])
         if status_check.returncode == 0:
             print("--- ✅✅✅ TUYỆT VỜI! Service Logstash đang 'active (running)' với cấu hình mới. ---")
-            print("--- Bạn có thể xem log bằng lệnh: sudo journalctl -u logstash -f ---")
         else:
-            print("--- ❌❌❌ CẢNH BÁO: Logstash service đã KHÔNG thể khởi động thành công sau khi restart. ---")
-            print("--- Hãy kiểm tra log chi tiết bằng lệnh: sudo journalctl -u logstash ---")
+            print("--- ❌❌❌ CẢNH BÁO: Logstash service đã KHÔNG thể khởi động thành công. ---")
         return True
     except subprocess.CalledProcessError as e:
         error_output = e.stderr.decode('utf-8') if e.stderr else str(e)
-        print(f"--- ❌ LỖI trong quá trình triển khai. ---")
-        print(f"Lệnh thất bại: {' '.join(e.cmd)}")
-        print(f"Lỗi chi tiết: {error_output}")
+        print(f"--- ❌ LỖI trong quá trình triển khai: {error_output} ---")
         return False
     except Exception as e:
         print(f"Đã xảy ra lỗi không xác định: {e}")
         return False
 
 def main():
-    """Hàm chính, có thể chạy ở 2 chế độ: tạo mới hoặc sửa lỗi."""
-    
+    """Hàm chính điều phối vòng lặp tự sửa lỗi, được điều khiển bởi tham số."""
     parser = argparse.ArgumentParser(description="Tự động tạo và sửa lỗi cấu hình Logstash.")
-    parser.add_argument("log_type", help="Tên của loại log cần xử lý (phải trùng với tên thư mục trong log_definitions).")
-    parser.add_argument("--fix", action="store_true", help="Chạy ở chế độ sửa lỗi. Sẽ đọc file config hiện tại.")
+    parser.add_argument("log_type", help="Tên của loại log cần xử lý (trùng với tên thư mục trong log_definitions).")
+    parser.add_argument("--fix", action="store_true", help="Chạy ở chế độ sửa lỗi.")
     parser.add_argument("--error", help="Thông báo lỗi được cung cấp bởi bộ giám sát.")
     args = parser.parse_args()
 
-    log_type_to_process = args.log_type
-    initial_error = args.error
-
-    if not initialize_env(log_type_to_process):
-        return
+    if not initialize_env(args.log_type): return
 
     # --- LẤY CÁC BIẾN CẤU HÌNH TỪ .env ĐÃ ĐƯỢC TẢI ---
-    log_type_name = os.getenv("LOG_TYPE_NAME", log_type_to_process)
+    log_type_name = os.getenv("LOG_TYPE_NAME", args.log_type)
     log_schema = os.getenv("LOG_SCHEMA")
     log_sample = os.getenv("LOG_SAMPLE")
     desired_output = os.getenv("LOG_DESIRED_JSON")
-    log_input_path = os.getenv("LOG_INPUT_FILE_PATH")
     final_config_path = os.getenv("LOGSTASH_CONFIG_PATH")
-    es_index_prefix = os.getenv("ELASTICSEARCH_INDEX_PREFIX")
-    es_hosts = os.getenv("ELASTICSEARCH_HOSTS")
     log_filter_rules = os.getenv("LOG_FILTER_RULES")
+    # Lấy toàn bộ khối input và output
+    input_config = os.getenv("LOG_INPUT_CONFIG")
+    output_config = os.getenv("LOG_OUTPUT_CONFIG")
+    # --------------------------------------------------
 
-    # Kiểm tra các biến quan trọng
-    required_vars = {
-        "LOG_SCHEMA": log_schema, "LOG_SAMPLE": log_sample, "LOG_DESIRED_JSON": desired_output,
-        "LOGSTASH_CONFIG_PATH": final_config_path,
-        "ELASTICSEARCH_INDEX_PREFIX": es_index_prefix, "ELASTICSEARCH_HOSTS": es_hosts,
-        "LOG_FILTER_RULES": log_filter_rules,
-    }
-    # LOG_INPUT_FILE_PATH is optional if LOG_INPUT_CONFIG is used
-    if not os.getenv("LOG_INPUT_CONFIG") and not log_input_path:
-        required_vars["LOG_INPUT_FILE_PATH"] = log_input_path
-
+    required_vars = {"LOG_SCHEMA": log_schema, "LOG_SAMPLE": log_sample, "LOGSTASH_CONFIG_PATH": final_config_path, "LOG_FILTER_RULES": log_filter_rules, "LOG_INPUT_CONFIG": input_config, "LOG_OUTPUT_CONFIG": output_config}
     missing_vars = [key for key, value in required_vars.items() if not value]
     if missing_vars:
         print(f"LỖI: Các biến sau không được định nghĩa trong file .env: {', '.join(missing_vars)}")
@@ -168,24 +143,14 @@ def main():
         
     print(f"--- Đang chạy cho loại log: {log_type_name} ---")
 
-    # Xây dựng cấu hình input/output từ các biến
-    input_config = os.getenv("LOG_INPUT_CONFIG")
-    if not input_config: # Fallback to file input if full config not provided
-        input_config = f"""file {{ path => "{log_input_path}" start_position => "beginning" }}"""
-        
-    es_index = f"{es_index_prefix}-%{{+YYYY.MM.dd}}"
-    output_config = f"""elasticsearch {{ hosts => {es_hosts} index => "{es_index}" }}"""
-    # -----------------------------------------------
-
     status_check = subprocess.run(["sudo", "systemctl", "is-active", "--quiet", "logstash"])
     if status_check.returncode == 0:
-        print("--- ⚠️ Service Logstash đang chạy. Sẽ tạm thời dừng service để bắt đầu quá trình tạo config mới. ---")
+        print("--- ⚠️ Service Logstash đang chạy. Sẽ tạm thời dừng... ---")
         try:
             subprocess.run(["sudo", "systemctl", "stop", "logstash"], check=True, capture_output=True)
             print("--- ✅ Service Logstash đã được dừng tạm thời. ---")
         except subprocess.CalledProcessError as e:
-            error_output = e.stderr.decode('utf-8') if e.stderr else str(e)
-            print(f"--- ❌ Không thể dừng service Logstash. Vui lòng kiểm tra quyền sudo. Lỗi: {error_output} ---")
+            print(f"--- ❌ Không thể dừng service Logstash. Lỗi: {e.stderr.decode()} ---")
             return
     else:
         print("--- Service Logstash hiện không chạy. Bắt đầu quá trình... ---")
@@ -194,28 +159,26 @@ def main():
     if args.fix:
         print(f"--- 🏃 Chạy ở chế độ SỬA LỖI cho file: {final_config_path} ---")
         try:
-            with open(final_config_path, 'r', encoding='utf-8') as f:
-                existing_code = f.read()
+            with open(final_config_path, 'r', encoding='utf-8') as f: existing_code = f.read()
             print("--- ✅ Đã đọc thành công file config bị lỗi. ---")
         except FileNotFoundError:
             print(f"--- ⚠️ Không tìm thấy file config '{final_config_path}'. Chuyển sang chế độ tạo mới. ---")
-            initial_error = None # Không có file cũ thì không thể sửa lỗi
-            args.fix = False # Tắt chế độ fix
+            args.error = None
             
     max_retries = 5
     current_code = existing_code
-    error_message = initial_error # Bắt đầu vòng lặp với lỗi được cung cấp (nếu có)
+    error_message = args.error
     
     for i in range(max_retries):
         print(f"\n--- VÒNG LẶP {i + 1}/{max_retries} ---")
         current_code = generate_logstash_config(log_sample, desired_output, input_config, output_config, log_schema, log_filter_rules, log_type_name, current_code, error_message)
-        if current_code:
-            print("\n--- 📄 Code do AI tạo ra trong lần lặp này: ---")
-            print(current_code)
-            print("-------------------------------------------\n")
-        else:
+        if not current_code:
             print("--- ❌ AI không trả về code. Dừng vòng lặp. ---")
             break
+        
+        print("\n--- 📄 Code do AI tạo ra trong lần lặp này: ---")
+        print(current_code)
+        print("-------------------------------------------\n")
         
         stdout, stderr, exit_code = test_logstash_config(current_code, log_sample)
         
@@ -239,16 +202,4 @@ def main():
     print(f"\n--- ❌ Thất bại sau {max_retries} lần thử. Không thể tạo và triển khai cấu hình. ---")
 
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print("LỖI: Vui lòng chỉ định loại log cần xử lý.")
-        print("Cú pháp: python3 parserlog.py <tên_thư_muc_log>")
-        print("Ví dụ:  python3 parserlog.py paloalto_traffic")
-    elif not os.getenv('GOOGLE_API_KEY', default=load_dotenv(os.path.join("log_definitions", sys.argv[1], ".env")) and os.getenv('GOOGLE_API_KEY')):
-        # Thử tải key từ .env chung nếu có, sau đó thử tải từ .env chuyên dụng
-        load_dotenv()
-        if not os.getenv('GOOGLE_API_KEY'):
-             print("LỖI: Biến GOOGLE_API_KEY không tìm thấy. Vui lòng kiểm tra các file .env.")
-        else:
-             main()
-    else:
-        main()
+    main()
